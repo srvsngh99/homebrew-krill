@@ -1,12 +1,14 @@
-# Homebrew formula for Krill
+# Release snapshot used by this repository's consistency checks.
+# The canonical installable formula lives in github.com/srvsngh99/homebrew-krill.
+# Release prep updates both copies from the same published asset and SHA-256.
 # Install: brew tap srvsngh99/krill && brew install krill
 class Krill < Formula
   desc "Fast local LLM inference CLI for Apple Silicon"
   homepage "https://github.com/srvsngh99/Krill"
-  url "https://github.com/srvsngh99/Krill/releases/download/v0.16.2/krill-0.16.2-arm64-apple-macos.tar.gz"
-  sha256 "7d1890435302c5b10f55c0e746e5b89ad30057715cd03ad5b8fcd96d27dd56b9"
+  url "https://github.com/srvsngh99/Krill/releases/download/v0.16.3/krill-0.16.3-arm64-apple-macos.tar.gz"
+  sha256 "c4a27786fe61812ea6764974001c3856bee56aa63fabb391298f6fd7b741f47c"
   license "MIT"
-  version "0.16.2"
+  version "0.16.3"
 
   depends_on :macos
   depends_on arch: :arm64
