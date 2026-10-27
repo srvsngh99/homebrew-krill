@@ -14,17 +14,23 @@ on:
 permissions:
   contents: write            # commit the bump to THIS repo — built-in token, no PAT
 
+# Overlapping runs or a re-run could re-upload over the bottle the formula pins.
+concurrency:
+  group: auto-bump
+  cancel-in-progress: false
+
 jobs:
   bump:
     runs-on: macos-15         # brew bottle needs a Mac
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}   # branch tip, so a late run sees the bottle and exits
 
       - name: Bump formula to latest Krill release and bottle it
         env:
           GH_TOKEN: ${{ github.token }}
           HOMEBREW_NO_AUTO_UPDATE: 1
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
         run: |
           set -euo pipefail
           REPO=srvsngh99/Krill
@@ -32,7 +38,7 @@ jobs:
           VER="${TAG#v}"
           CUR=$(ruby -e 'puts(File.read("Formula/krill.rb")[/^\s*version\s+"([^"]+)"/, 1] || "")')
           echo "Latest release: $VER | formula currently: $CUR"
-          if [ "$VER" = "$CUR" ] && grep -q '^  bottle do' Formula/krill.rb; then
+          if [ "$VER" = "$CUR" ] && grep -q "releases/download/krill-${VER}\"" Formula/krill.rb; then
             echo "Formula already at $VER with a bottle; nothing to do."
             exit 0
           fi
@@ -65,17 +71,16 @@ jobs:
           # Macs whose Xcode tools are older than their macOS.
           brew tap srvsngh99/krill "$PWD"
           brew install --build-bottle srvsngh99/krill/krill
-          brew bottle --json --root-url="https://github.com/${GITHUB_REPOSITORY}/releases/download/krill-${VER}" srvsngh99/krill/krill
+          brew bottle --json --no-rebuild --root-url="https://github.com/${GITHUB_REPOSITORY}/releases/download/krill-${VER}" srvsngh99/krill/krill
           LOCAL=$(jq -r '.[].bottle.tags[].local_filename' krill--*.json)
           REMOTE=$(jq -r '.[].bottle.tags[].filename' krill--*.json)
           mv "$LOCAL" "$REMOTE"
           gh release view "krill-${VER}" >/dev/null 2>&1 ||
-            gh release create "krill-${VER}" --title "krill ${VER} bottle" --notes "Homebrew bottle for Krill ${VER}."
+            gh release create "krill-${VER}" --latest=false --title "krill ${VER} bottle" --notes "Homebrew bottle for Krill ${VER}."
           gh release upload "krill-${VER}" "$REMOTE" --clobber
 
           brew bottle --merge --write --no-commit krill--*.json
           cp "$(brew --repo srvsngh99/krill)/Formula/krill.rb" Formula/krill.rb
-          ruby -c Formula/krill.rb
           echo "----- updated formula -----"
           grep -E '^\s*(url|sha256|version|root_url) ' Formula/krill.rb
           git commit -q --amend -am "krill ${VER}"
