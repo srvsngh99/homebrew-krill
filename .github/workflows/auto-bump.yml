@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   bump:
+    if: github.ref == 'refs/heads/main'   # other refs would rebottle over main's pinned bottle
     runs-on: macos-15         # brew bottle needs a Mac
     steps:
       - uses: actions/checkout@v4
@@ -38,7 +39,7 @@ jobs:
           VER="${TAG#v}"
           CUR=$(ruby -e 'puts(File.read("Formula/krill.rb")[/^\s*version\s+"([^"]+)"/, 1] || "")')
           echo "Latest release: $VER | formula currently: $CUR"
-          if [ "$VER" = "$CUR" ] && grep -q "releases/download/krill-${VER}\"" Formula/krill.rb; then
+          if [ "$VER" = "$CUR" ] && grep -qF "releases/download/krill-${VER}\"" Formula/krill.rb; then
             echo "Formula already at $VER with a bottle; nothing to do."
             exit 0
           fi
