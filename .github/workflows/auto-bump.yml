@@ -1,10 +1,8 @@
 name: Auto-bump formula
 
-# Keep Formula/krill.rb in sync with the latest Krill release WITHOUT any
-# personal access token. This workflow lives in the tap repo, so it writes to
-# the tap with the built-in GITHUB_TOKEN (scoped to this repo) — nothing to
-# create or store. It polls the (public) Krill releases on a schedule, and you
-# can also trigger it instantly after cutting a release via "Run workflow".
+# Keeps Formula/krill.rb on the latest Krill release and bottles it, using the
+# built-in GITHUB_TOKEN (no personal token). Polls every 6 hours; run it by
+# hand right after a release.
 
 on:
   schedule:
@@ -12,16 +10,16 @@ on:
   workflow_dispatch: {}      # instant manual bump right after a release
 
 permissions:
-  contents: write            # commit the bump to THIS repo — built-in token, no PAT
-
-# Overlapping runs or a re-run could re-upload over the bottle the formula pins.
-concurrency:
-  group: auto-bump
-  cancel-in-progress: false
+  contents: write            # commit the bump to THIS repo - built-in token, no PAT
 
 jobs:
   bump:
     if: github.ref == 'refs/heads/main'   # other refs would rebottle over main's pinned bottle
+    # Overlapping runs or a re-run could re-upload over the bottle the formula pins.
+    # Job-level, so a skipped run from another ref cannot bump a queued main run.
+    concurrency:
+      group: auto-bump
+      cancel-in-progress: false
     runs-on: macos-15         # brew bottle needs a Mac
     steps:
       - uses: actions/checkout@v4
