@@ -1,35 +1,36 @@
-# homebrew-krillm
+# homebrew-krill
 
-Homebrew tap for [KrillLM](https://github.com/srvsngh99/KrillLM) - fast local
-LLM inference CLI for Apple Silicon.
+Homebrew tap for [Krill](https://github.com/srvsngh99/Krill) - a local LLM
+engine and coding agent in one Mac-native binary.
 
 ## Install
 
 ```sh
-brew tap srvsngh99/krillm
-brew install krillm
+brew tap srvsngh99/krill
+brew install krill
 ```
 
 ## Update
 
 ```sh
 brew update
-brew upgrade krillm
+brew upgrade krill
 ```
 
 ## Requirements
 
-Apple Silicon (M1 or newer), macOS.
+Apple Silicon (M1 or newer), macOS 14 or newer. On macOS 15 and newer, brew
+pours a prebuilt bottle. On macOS 14 it runs the install step instead, which
+needs up-to-date Xcode Command Line Tools.
 
 ## Quick start
 
 ```sh
-krillm pull llama-3.2-3b
-krillm run llama-3.2-3b
-
-# Ollama / OpenAI compatible API server:
-krillm serve --model llama-3.2-3b
+krill pull gemma-4-e2b
+krill run gemma-4-e2b
+krill code "fix the failing test"
+krill serve
 ```
 
-The formula here tracks tagged releases of the main repo. The current
-formula points at `v0.4.0`.
+`.github/workflows/auto-bump.yml` keeps the formula on the latest Krill release
+and builds its bottle.

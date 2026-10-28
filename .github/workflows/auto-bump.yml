@@ -14,15 +14,24 @@ on:
 permissions:
   contents: write            # commit the bump to THIS repo — built-in token, no PAT
 
+# Overlapping runs or a re-run could re-upload over the bottle the formula pins.
+concurrency:
+  group: auto-bump
+  cancel-in-progress: false
+
 jobs:
   bump:
-    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'   # other refs would rebottle over main's pinned bottle
+    runs-on: macos-15         # brew bottle needs a Mac
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}   # branch tip, so a late run sees the bottle and exits
 
-      - name: Bump formula to latest Krill release
+      - name: Bump formula to latest Krill release and bottle it
         env:
           GH_TOKEN: ${{ github.token }}
+          HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           set -euo pipefail
           REPO=srvsngh99/Krill
@@ -30,30 +39,51 @@ jobs:
           VER="${TAG#v}"
           CUR=$(ruby -e 'puts(File.read("Formula/krill.rb")[/^\s*version\s+"([^"]+)"/, 1] || "")')
           echo "Latest release: $VER | formula currently: $CUR"
-          if [ "$VER" = "$CUR" ]; then
-            echo "Formula already at $VER — nothing to do."
+          if [ "$VER" = "$CUR" ] && grep -qF "releases/download/krill-${VER}\"" Formula/krill.rb; then
+            echo "Formula already at $VER with a bottle; nothing to do."
             exit 0
           fi
 
-          ASSET="krill-${VER}-arm64-apple-macos.tar.gz"
-          URL="https://github.com/$REPO/releases/download/${TAG}/${ASSET}"
-          echo "Downloading $URL"
-          curl -fSL "$URL" -o "$ASSET"
-          SHA=$(shasum -a 256 "$ASSET" | awk '{print $1}')
+          # A stale bottle block would point at the previous version's bottle.
+          ruby -0777 -i -pe '$_.sub!(/^  bottle do\n.*?^  end\n\n/m, "")' Formula/krill.rb
 
-          # Ruby block-form sub! (the formula's own language): preserves indent
-          # via $1, only the 3 target lines change, no GNU/BSD sed backref issues.
-          NEW_URL="$URL" NEW_SHA="$SHA" NEW_VER="$VER" ruby -i -pe '
-            $_.sub!(/^(\s*url\s+)".*"/)     { "#{$1}\"#{ENV["NEW_URL"]}\"" }
-            $_.sub!(/^(\s*sha256\s+)".*"/)  { "#{$1}\"#{ENV["NEW_SHA"]}\"" }
-            $_.sub!(/^(\s*version\s+)".*"/) { "#{$1}\"#{ENV["NEW_VER"]}\"" }
-          ' Formula/krill.rb
+          if [ "$VER" != "$CUR" ]; then
+            ASSET="krill-${VER}-arm64-apple-macos.tar.gz"
+            URL="https://github.com/$REPO/releases/download/${TAG}/${ASSET}"
+            echo "Downloading $URL"
+            curl -fSL "$URL" -o "$ASSET"
+            SHA=$(shasum -a 256 "$ASSET" | awk '{print $1}')
+
+            # Ruby block-form sub! (the formula's own language): preserves indent
+            # via $1, only the 3 target lines change, no GNU/BSD sed backref issues.
+            NEW_URL="$URL" NEW_SHA="$SHA" NEW_VER="$VER" ruby -i -pe '
+              $_.sub!(/^(\s*url\s+)".*"/)     { "#{$1}\"#{ENV["NEW_URL"]}\"" }
+              $_.sub!(/^(\s*sha256\s+)".*"/)  { "#{$1}\"#{ENV["NEW_SHA"]}\"" }
+              $_.sub!(/^(\s*version\s+)".*"/) { "#{$1}\"#{ENV["NEW_VER"]}\"" }
+            ' Formula/krill.rb
+          fi
           ruby -c Formula/krill.rb               # fail fast if the rewrite broke it
-          echo "----- updated formula -----"
-          grep -E '^\s*(url|sha256|version) ' Formula/krill.rb
 
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "krill ${VER}"
+          git commit -q --allow-empty -am "krill ${VER}"   # local only: brew taps this commit
+
+          # Without a bottle, brew treats the install as a source build and refuses
+          # Macs whose Xcode tools are older than their macOS.
+          brew tap srvsngh99/krill "$PWD"
+          brew install --build-bottle srvsngh99/krill/krill
+          brew bottle --json --no-rebuild --root-url="https://github.com/${GITHUB_REPOSITORY}/releases/download/krill-${VER}" srvsngh99/krill/krill
+          LOCAL=$(jq -r '.[].bottle.tags[].local_filename' krill--*.json)
+          REMOTE=$(jq -r '.[].bottle.tags[].filename' krill--*.json)
+          mv "$LOCAL" "$REMOTE"
+          gh release view "krill-${VER}" >/dev/null 2>&1 ||
+            gh release create "krill-${VER}" --latest=false --title "krill ${VER} bottle" --notes "Homebrew bottle for Krill ${VER}."
+          gh release upload "krill-${VER}" "$REMOTE" --clobber
+
+          brew bottle --merge --write --no-commit krill--*.json
+          cp "$(brew --repo srvsngh99/krill)/Formula/krill.rb" Formula/krill.rb
+          echo "----- updated formula -----"
+          grep -E '^\s*(url|sha256|version|root_url) ' Formula/krill.rb
+          git commit -q --amend -am "krill ${VER}"
           git push
-          echo "Bumped tap to krill ${VER}."
+          echo "Bumped tap to krill ${VER} with a bottle."

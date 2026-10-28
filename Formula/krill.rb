@@ -10,6 +10,12 @@ class Krill < Formula
   license "MIT"
   version "0.27.2"
 
+  bottle do
+    root_url "https://github.com/srvsngh99/homebrew-krill/releases/download/krill-0.27.2"
+    rebuild 1
+    sha256 arm64_sequoia: "9575cedf12eea4ee69bb2f49a4076f709d40cb1bbfa2bc09dd505097fc4bf9fe"
+  end
+
   depends_on :macos
   depends_on arch: :arm64
 
